@@ -1,0 +1,29 @@
+func setup() {
+>---class = flag.String("class", "statistic-base", "counter define base-stats rule type")
+>---variableIdPrefix = flag.String("variableId", "common_YearMonthDay", "which rule be move")
+>---sourceUser = flag.String("sourceUser", "root", "source user")
+>---sourceHost = flag.String("sourceHost", "10.66.191.34", "source database host")
+>---sourcePasswd = flag.String("sourcePasswd", "shumeitest2018", "source database passwd")
+>---sourcePort = flag.Int("sourcePort", 3306, "mysql port")
+>---sourceDbName = flag.String("sourceDbName", "sentry", "source database")
+
+>---targetUser = flag.String("targetUser", "root", " target user")
+>---targetHost = flag.String("targetHost", "", "target database host")
+>---targetPasswd = flag.String("targetPasswd", "", "target database passwd")
+>---targetPort = flag.Int("targetPort", 3306, "mysql port")
+>---targetDbName = flag.String("targetDbName", "sentry", "target database")
+>---flag.Parse()
+}
+
+
+从测试环境写到开发环境
+./move -sourceHost=10.66.191.34 -sourceUser=root -sourcePasswd=shumeitest2018 -targetHost=10.141.0.234 -targetUser=root -targetPasswd=shumeiShumei2016 -variableId=_organization_serviceId_class_appId -class=statistic-bill
+
+
+从开发环境写到测试环境
+./move -sourceHost=10.141.0.234 -sourceUser=root -sourcePasswd=shumeiShumei2016 -targetHost=10.66.191.34 -targetUser=root -targetPasswd=shumeitest2018 -variableId=_organization_serviceId_class_appId -class=statistic-bill
+
+
+
+./moveRuleToOnline -targetHost=10.66.130.187 -targetUser=smonline -targetPasswd=SMsmOnline2019 -targetDbName=sentry -variableId=common_Year
+./moveRuleToOnline -targetHost=10.141.0.234 -targetPasswd=shumeiShumei2016 -targetDbName=sentry -variableId=common_YearMonth
