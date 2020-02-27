@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -42,13 +43,23 @@ func main() {
 		return
 	}
 	defer sourceDB.Close()
+	fieldCountMap = make(map[string]int64)
 	if scanErr := scanAndCount(); scanErr != nil {
 		log.Println("scan Error", scanErr)
 		return
 	}
 	fmt.Println("----- GET FIELD COUNT END. -----")
+	if len(fieldCountMap) > 0 {
+		if countResult, marshalERR := json.Marshal(fieldCountMap); marshalERR != nil {
+			fmt.Println("countResult marshal error")
+		} else {
+			fmt.Println(fmt.Sprintf("countResult = [%v]", countResult))
+		}
+	} else {
+		fmt.Println("NOT GET FIELD COUNT")
+	}
+	fmt.Println("----- finish. -----")
 	return
-
 }
 
 
@@ -107,13 +118,11 @@ func scanAndCount() error {
 	}
 	maxIdRows.Close()
 
-
-	fieldCountMap = make(map[string]int64)
 	//然后使用id区间对画像表进行扫描来统计数据
 	for scanTimes := uint64(0); scanTimes * 1000 < maxId; scanTimes++ {
 
 		scanSql := fmt.Sprintf("SELECT `originalKey`, `field`, `value`, `expire`, `modifyTime` FROM `%s` where id >= %v and id < %v;",
-			*sourceDbTable, scanTimes * 1000, (scanTimes + 1) * 1000
+			*sourceDbTable, scanTimes * 1000, (scanTimes + 1) * 100)
 		dataRows, queryErr := sourceDB.Query(scanSql)
 		if queryErr != nil {
 			fmt.Println(fmt.Sprintf("Query failed.(%v); sql=(%v)", err, scanSql))
