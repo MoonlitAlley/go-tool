@@ -1,0 +1,4 @@
+
+go run getProfileFieldCount.go -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_tel_cluster >> getresult.txt
+
+go run getProfileFieldCount.go -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_tel_cluster
