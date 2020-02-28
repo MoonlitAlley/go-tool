@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/csv"
-	"encoding/json"
+	//"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,9 +13,6 @@ import (
 	"time"
 )
 
-var sourceDB *sql.DB
-var fieldCountMap map[string]*lastInfo
-var fieldCount uint64
 var (
 	sourceHost    *string
 	sourceUser    *string
@@ -23,6 +20,13 @@ var (
 	sourcePort    *int
 	sourceDbName  *string
 	sourceDbTable *string
+
+	sleepPerQuery *int
+	rowsPerQuery  *int
+
+	sourceDB      *sql.DB
+	fieldCountMap map[string]*lastInfo
+	fieldCount    uint64
 )
 
 type lastInfo struct {
@@ -42,6 +46,9 @@ func setup() {
 	sourcePort = flag.Int("sourcePort", 3306, "mysql port")
 	sourceDbName = flag.String("sourceDbName", "profile_storage", "source database")
 	sourceDbTable = flag.String("sourceDbTable", "storage_cluster", "source table")
+
+	sleepPerQuery = flag.Int("sleepPerQuery", 10, "sleep per query to limit mysql qps")
+	rowsPerQuery = flag.Int("rowsPerQuery", 1000, "rows per query to limit mysql qps")
 	flag.Parse()
 }
 
@@ -73,17 +80,19 @@ func main() {
 	writer.Write(title)
 	for field, lastinfo := range fieldCountMap {
 		record := []string{field, fmt.Sprintf("%v", lastinfo.fieldCount), lastinfo.lastModifyTime, lastinfo.lastModifyKey}
-		fmt.Println("get one record.", record)
+		//fmt.Println("get one record.", record)
 		writer.Write(record)
 	}
 	writer.Flush()
 	if len(fieldCountMap) > 0 {
 		fmt.Println(fmt.Sprintf("keyCount = [%v], fieldCount =[%v]", fieldCount, len(fieldCountMap)))
-		if countResult, marshalERR := json.Marshal(fieldCountMap); marshalERR != nil {
-			fmt.Println("countResult marshal error")
-		} else {
-			fmt.Println(fmt.Sprintf("countResult = [%v]", string(countResult)))
-		}
+		/*
+			if countResult, marshalERR := json.Marshal(fieldCountMap); marshalERR != nil {
+				fmt.Println("countResult marshal error")
+			} else {
+				fmt.Println(fmt.Sprintf("countResult = [%v]", string(countResult)))
+			}
+		*/
 	} else {
 		fmt.Println("NOT GET FIELD COUNT")
 	}
@@ -158,17 +167,17 @@ func scanAndCount() error {
 	expireKeyWriter := csv.NewWriter(f)
 
 	//然后使用id区间对画像表进行扫描来统计数据
-	for scanTimes := uint64(0); scanTimes*1000 < maxId; scanTimes++ {
+	for scanTimes := uint64(0); scanTimes*uint64(*rowsPerQuery) < maxId; scanTimes++ {
 		//输出当前执行进度
 		load := ""
-		for i := uint64(0); i < (scanTimes * 1000 * 100 / maxId); i++ {
+		for i := uint64(0); i < (scanTimes * uint64(*rowsPerQuery) * 100 / maxId); i++ {
 			load = load + "="
 			loadStr := fmt.Sprintf("[%s    %v]", load, i)
 			fmt.Printf("\r%s", loadStr)
 		}
 
 		scanSql := fmt.Sprintf("SELECT `id`, `originalKey`, `field`, `value`, `expire`, `modifyTime` FROM `%s` where id >= %v and id < %v;",
-			*sourceDbTable, scanTimes*1000, (scanTimes+1)*1000)
+			*sourceDbTable, scanTimes*uint64(*rowsPerQuery), (scanTimes+1)*uint64(*rowsPerQuery))
 		dataRows, queryErr := sourceDB.Query(scanSql)
 		if queryErr != nil {
 			fmt.Println(fmt.Sprintf("Query failed.(%v); sql=(%v)", err, scanSql))
@@ -188,12 +197,14 @@ func scanAndCount() error {
 					fmt.Println("parseErr")
 					continue
 				}
-				if (modifyTime.Unix() + expire) > time.Now().Unix() {
-					fmt.Println("true, id=", id)
-				} else {
+				if (modifyTime.Unix() + expire) < time.Now().Unix() {
 					record := []string{fmt.Sprintf("%v", id), originalKey, field, value, fmt.Sprintf("%v", expire), modifyTimeStamp}
 					expireKeyWriter.Write(record)
-					//fmt.Println("false, id=", id)
+					/*
+							fmt.Println("false, id=", id)
+						} else {
+							//fmt.Println("true, id=", id)
+					*/
 				}
 			}
 			if _, ok := fieldCountMap[field]; ok {
@@ -214,7 +225,7 @@ func scanAndCount() error {
 			}
 			fieldCount++
 		}
-		//time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Duration(*sleepPerQuery) * time.Millisecond)
 	}
 	expireKeyWriter.Flush()
 	fmt.Println("")

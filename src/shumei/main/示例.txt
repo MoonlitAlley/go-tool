@@ -1,4 +1,9 @@
 
+nohup ./getProfileFieldCount -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_token_cluster >> nohup.txt &
+
+//配置sleep时间和单次查询条数
+nohup ./getProfileFieldCount -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_tel_cluster -sleepPerQuery=10 -rowsPerQuery=1000 >> nohup.txt &
+
 go run getProfileFieldCount.go -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_tel_cluster >> getresult.txt
 
 go run getProfileFieldCount.go -sourceUser=root -sourcePasswd=shumeitest2018 -sourceHost=10.66.191.34 -sourceDbName=storage_profile_tel_cluster
