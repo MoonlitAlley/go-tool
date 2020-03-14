@@ -148,6 +148,7 @@ func scanAndCount() error {
 	maxIdRows, err := sourceDB.Query(getMaxIdSql)
 	if err != nil {
 		fmt.Println(fmt.Sprintf("Get Max Id Failed.(%v)", err))
+		return err
 	}
 	maxIdRows.Next()
 	maxIdSacnErr := maxIdRows.Scan(&maxId)
@@ -166,14 +167,18 @@ func scanAndCount() error {
 	f.WriteString("\xEF\xBB\xBF")
 	expireKeyWriter := csv.NewWriter(f)
 
+	loading := uint64(0)
 	//然后使用id区间对画像表进行扫描来统计数据
 	for scanTimes := uint64(0); scanTimes*uint64(*rowsPerQuery) < maxId; scanTimes++ {
 		//输出当前执行进度
-		load := ""
-		for i := uint64(0); i < (scanTimes * uint64(*rowsPerQuery) * 100 / maxId); i++ {
-			load = load + "="
-			loadStr := fmt.Sprintf("[%s    %v]", load, i)
-			fmt.Printf("\r%s", loadStr)
+		if loading < (scanTimes * uint64(*rowsPerQuery) * 100 / maxId) {
+			loading = (scanTimes * uint64(*rowsPerQuery) * 100 / maxId)
+			load := ""
+			for i := uint64(0); i < loading; i++ {
+				load = load + "="
+				loadStr := fmt.Sprintf("[%s    %v]", load, i)
+				fmt.Printf("\r%s", loadStr)
+			}
 		}
 
 		scanSql := fmt.Sprintf("SELECT `id`, `originalKey`, `field`, `value`, `expire`, `modifyTime` FROM `%s` where id >= %v and id < %v;",
