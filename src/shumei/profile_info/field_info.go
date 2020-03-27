@@ -1,16 +1,15 @@
-package main
+package profile_info
 
 import (
-	"database/sql"
-	"encoding/csv"
-	//"encoding/json"
-	"errors"
-	"flag"
-	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"log"
-	"os"
-	"time"
+"database/sql"
+"encoding/csv"
+"errors"
+"flag"
+"fmt"
+_ "github.com/go-sql-driver/mysql"
+"log"
+"os"
+"time"
 )
 
 var (
@@ -25,15 +24,8 @@ var (
 	rowsPerQuery  *int
 
 	sourceDB      *sql.DB
-	fieldCountMap map[string]*lastInfo
 	fieldCount    uint64
 )
-
-type lastInfo struct {
-	lastModifyKey  string
-	lastModifyTime string
-	fieldCount     int64
-}
 
 func init() {
 	setup()
@@ -63,38 +55,6 @@ func main() {
 	if scanErr := scanAndCount(); scanErr != nil {
 		log.Println("scan Error", scanErr)
 		return
-	}
-	fmt.Println("----- GET FIELD COUNT END. -----")
-	fieldCountFileName := *sourceHost + "_fieldCount.csv"
-	f, err := os.Create(fieldCountFileName)
-	if err != nil {
-		fmt.Println("ceate file error")
-		return
-	}
-	defer f.Close()
-	f.WriteString("\xEF\xBB\xBF")
-	writer := csv.NewWriter(f)
-	sum := []string{"filed总量", fmt.Sprintf("%v", len(fieldCountMap))}
-	writer.Write(sum)
-	title := []string{"field", "count", "lastUpdateTime", "lastUpdateKey"}
-	writer.Write(title)
-	for field, lastinfo := range fieldCountMap {
-		record := []string{field, fmt.Sprintf("%v", lastinfo.fieldCount), lastinfo.lastModifyTime, lastinfo.lastModifyKey}
-		//fmt.Println("get one record.", record)
-		writer.Write(record)
-	}
-	writer.Flush()
-	if len(fieldCountMap) > 0 {
-		fmt.Println(fmt.Sprintf("keyCount = [%v], fieldCount =[%v]", fieldCount, len(fieldCountMap)))
-		/*
-			if countResult, marshalERR := json.Marshal(fieldCountMap); marshalERR != nil {
-				fmt.Println("countResult marshal error")
-			} else {
-				fmt.Println(fmt.Sprintf("countResult = [%v]", string(countResult)))
-			}
-		*/
-	} else {
-		fmt.Println("NOT GET FIELD COUNT")
 	}
 	fmt.Println("----- finish. -----")
 	return
@@ -171,8 +131,8 @@ func scanAndCount() error {
 	//然后使用id区间对画像表进行扫描来统计数据
 	for scanTimes := uint64(0); scanTimes*uint64(*rowsPerQuery) < maxId; scanTimes++ {
 		//输出当前执行进度
-		if loading < (scanTimes * uint64(*rowsPerQuery) * 100 / maxId) {
-			loading = (scanTimes * uint64(*rowsPerQuery) * 100 / maxId)
+		if loading < (fieldCount / 10000) {
+			loading = (fieldCount / 10000)
 			load := ""
 			for i := uint64(0); i < loading; i++ {
 				load = load + "="
@@ -197,38 +157,22 @@ func scanAndCount() error {
 				continue
 			}
 			modifyTime, parseErr := time.Parse("2006-01-02 15:04:05", modifyTimeStamp)
-			if expire != 0 {
+			if expire == 0 {
 				if parseErr != nil {
 					fmt.Println("parseErr")
 					continue
 				}
-				if (modifyTime.Unix() + expire) < time.Now().Unix() {
-					record := []string{fmt.Sprintf("%v", id), originalKey, field, value, fmt.Sprintf("%v", expire), modifyTimeStamp}
-					expireKeyWriter.Write(record)
-					/*
-							fmt.Println("false, id=", id)
-						} else {
-							//fmt.Println("true, id=", id)
-					*/
-				}
-			}
-			if _, ok := fieldCountMap[field]; ok {
-				lastModifyTime, parseErr := time.Parse("2006-01-02 15:04:05", fieldCountMap[field].lastModifyTime)
-				if parseErr == nil {
-					if modifyTime.Unix() > lastModifyTime.Unix() {
-						fieldCountMap[field].lastModifyTime = modifyTimeStamp
-						fieldCountMap[field].lastModifyKey = originalKey
+				if field == "token_sample_score" {
+					if (modifyTime.Unix() > time.Now().Add(-1).Unix()) {
+						record := []string{fmt.Sprintf("%v", id), originalKey, field, value, fmt.Sprintf("%v", expire), modifyTimeStamp}
+						expireKeyWriter.Write(record)
+						fieldCount++
 					}
 				}
-				fieldCountMap[field].fieldCount += 1
-			} else {
-				lastinfo := lastInfo{fieldCount: 1,
-					lastModifyKey:  originalKey,
-					lastModifyTime: modifyTimeStamp}
-				fieldCountMap[field] = &lastinfo
-
 			}
-			fieldCount++
+		}
+		if fieldCount > 100000 {
+			break
 		}
 		time.Sleep(time.Duration(*sleepPerQuery) * time.Millisecond)
 	}
